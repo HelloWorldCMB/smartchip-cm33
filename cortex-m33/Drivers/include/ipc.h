@@ -23,24 +23,24 @@ typedef struct {
 #define IPC_CMD_ACK		0x80
 
 typedef struct {
-	uint32_t cmd;
-	uint32_t seq;
+	uint32 cmd;
+	uint32 seq;
 } ipc_cmd_hdr_t;
 
 typedef struct {
-	uint32_t unix_sec;
-	uint32_t unix_usec;
+	uint32 unix_sec;
+	uint32 unix_usec;
 } ipc_set_time_t;
 
 typedef struct {
-	uint32_t debounce_ms;
-	uint32_t reserved;
+	uint32 debounce_ms;
+	uint32 reserved;
 } ipc_set_param_t;
 
 typedef struct {
-	uint32_t cmd;
-	uint32_t seq;
-	uint32_t result;
+	uint32 cmd;
+	uint32 seq;
+	uint32 result;
 } ipc_ack_t;
 
 /* 通道1 遥信事件，总长 <= 64 字节 */
@@ -59,18 +59,19 @@ typedef struct {
 #define YAOXIN_DEBOUNCE_MS_DEFAULT	30
 
 typedef struct {
-	uint32_t gpio_bank;
-	uint32_t gpio_pin;
-	uint32_t timestamp;
-	uint32_t timestamp_us;
-	uint32_t count;
-	uint8_t  status;
-	uint8_t  yaoxin_type;
-	uint8_t  reserved[2];
+	uint32 gpio_bank;
+	uint32 gpio_pin;
+	uint32 timestamp;
+	uint32 timestamp_us;
+	uint32 count;
+	uint8  status;
+	uint8  yaoxin_type;
+	uint8  reserved[2];
 } yaoxin_event_t;
 
 void yaoxin_init(void);
 void yaoxin_handle_cfg_cmd(void);
-void yaoxin_send_event(uint32_t gpio_pin);
+void yaoxin_send_event(uint32 gpio_pin);
+void yaoxin_debug_poll(void);
 
 #endif

@@ -24,6 +24,7 @@ void Semaphore_Handler(void)
 
 #ifdef YAOXIN_ENABLE
 	if (channel == IPC_CFG_CHANNEL) {
+		fLib_printf("[yaoxin] semaphore irq, cfg channel\n");
 		yaoxin_handle_cfg_cmd();
 		return;
 	}

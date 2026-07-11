@@ -8,7 +8,7 @@
  * -------------------------------------------------------------------------
  *  MAJOR REVISION HISTORY
  * DATE        	AUTHOR       DESCRIPTION
- * 2015/06      BingYao      commands to do verification   
+ * 2015/06      BingYao      commands to do verification
  * -------------------------------------------------------------------------
  */
 
@@ -54,7 +54,7 @@ void ftssp010_set_sclkdiv(int base)
 	cr1 &= ~FTSSP010_CR1_SCLKDIV_MASK;
 	cr1 |= FTSSP010_CR1_SCLKDIV(sclkdiv);
 
-	outl(cr1, base + FTSSP010_REG_CR1); 
+	outl(cr1, base + FTSSP010_REG_CR1);
 }
 
 void ftssp010_ssp_reset(int base_addr)
@@ -149,7 +149,7 @@ void ftssp010_enable_FS(int base_addr, int tx, int rx, int fs)
 
 	if (rx)
 		cr2 |= FTSSP010_CR2_RXEN;
-	
+
 	if (fs)
 		cr2 |= FTSSP010_CR2_FS;
 
@@ -229,16 +229,16 @@ void ftssp010_SPI2AHB_master_init(int cr0)
 
 	outl(cr0, FTSSP010_REG_BASE_M + FTSSP010_REG_CR0);
 
-	ftssp010_set_sclkdiv(FTSSP010_REG_BASE_M); 
+	ftssp010_set_sclkdiv(FTSSP010_REG_BASE_M);
 	//outl(0x1f07cf, FTSSP010_REG_BASE_M + FTSSP010_REG_CR1);
-	
+
 	ftssp010_enable_FS(FTSSP010_REG_BASE_M, 0, 0, 1);
 
 	ftssp010_set_data_length(FTSSP010_REG_BASE_M, sdl_in_bytes);
 
 	ftssp010_set_pcl(FTSSP010_REG_BASE_M, pcl);
 	//outl(0x0, FTSSP010_REG_BASE_M + FTSSP010_REG_CR3);
-	
+
 	fLib_printf(" Master CR0 0x%x\n", inl(FTSSP010_REG_BASE_M +
 					FTSSP010_REG_CR0));
 	fLib_printf(" Master CR1 0x%x\n", inl(FTSSP010_REG_BASE_M +
@@ -257,15 +257,15 @@ int ftssp010_SSP_busy(int base_addr)
 void SPI2AHB_Write(int base, UINT32 wr_buf, UINT32 byte_addr, UINT32 num)
 {
 	UINT32 cur_addr, write_cmd1, write_cmd2, write_cmd3;
-	
-	fLib_printf("SPI2AHB: single word write, byte_addr = 0x%x, buf = %x\n", byte_addr, wr_buf);	
-  
+
+	fLib_printf("SPI2AHB: single word write, byte_addr = 0x%x, buf = %x\n", byte_addr, wr_buf);
+
 	ftssp010_clear_txfifo(base);
 	ftssp010_clear_rxfifo(base);
 
 	while(!ftssp010_txfifo_not_full(base))
 			;
-	
+
 	write_cmd1 = HSPI_WR_CMD | (byte_addr >> 1);
 	write_cmd2 = wr_buf >> 1;
 	if (wr_buf & 0x1)
@@ -273,19 +273,19 @@ void SPI2AHB_Write(int base, UINT32 wr_buf, UINT32 byte_addr, UINT32 num)
 	else
 		write_cmd3 = 0;
 
-	
-	//fLib_printf("write_cmd1 = 0x%x, write_cmd2 = 0x%x, write_cmd3 = 0x%x\n", write_cmd1, write_cmd2, write_cmd3);	
-	
+
+	//fLib_printf("write_cmd1 = 0x%x, write_cmd2 = 0x%x, write_cmd3 = 0x%x\n", write_cmd1, write_cmd2, write_cmd3);
+
 	outw(base + FTSSP010_REG_DATA_PORT, write_cmd3); // wr_buf + Dummy
 	outw(base + FTSSP010_REG_DATA_PORT, write_cmd2); // addr + wr_buf
 	outw(base + FTSSP010_REG_DATA_PORT, write_cmd1); // write CMD + addr
 
-	ftssp010_enable_FS(base, 1, 1, 0);	
-	//ftssp010_enable_FS(base, 1, 0, 0);	
-	
+	ftssp010_enable_FS(base, 1, 1, 0);
+	//ftssp010_enable_FS(base, 1, 0, 0);
+
 	outw(base + FTSSP010_REG_DATA_PORT, 0); // addr + wr_buf
 	while (ftssp010_txfifo_valid_entries(base))
-			;	
+			;
 
 	ftssp010_enable_FS(base, 0, 0, 1);
 }
@@ -301,30 +301,30 @@ void spi2ahb_dma_read(int base, UINT32 *buf, struct ssp_dma_req_mode *req_mode, 
 	int src_ctrl = 2 ;// Inc/dec/fixed --> 0/1/2
 	int dst_ctrl = 0 ;// Inc/dec/fixed --> 0/1/2
 	int priority = 0;
-	int hw = 1;	
-	
+	int hw = 1;
+
 	if(tx == 1){
 		src_ctrl = 0 ;// Inc/dec/fixed --> 0/1/2
-		dst_ctrl = 2 ;// Inc/dec/fixed --> 0/1/2	
+		dst_ctrl = 2 ;// Inc/dec/fixed --> 0/1/2
 	}
 	//prepare data bufer for dmac020
-	
+
 	//switch system mode register
 	switch_mode_register(req_mode->mode);
 	//send some data by using dma020 API;
-	
-  fLib_InitDMA(FALSE, FALSE, 0x0);	
-	fLib_DMA_ClearAllInterrupt(); 
-	fLib_DMA_EnableDMAInt(); //Enable DMA Interrupt			
+
+  fLib_InitDMA(FALSE, FALSE, 0x0);
+	fLib_DMA_ClearAllInterrupt();
+	fLib_DMA_EnableDMAInt(); //Enable DMA Interrupt
 	if(tx == 1)
 		fLib_DMA_NormalMode(0, (UINT32)buf, base+0x18, len, src_width , dst_width, burst_size, src_ctrl,dst_ctrl ,priority, hw,req_mode->dma_txreq);
 	else
 		fLib_DMA_NormalMode(0,base+0x18, (UINT32)buf, len, src_width , dst_width, burst_size, src_ctrl,dst_ctrl ,priority, hw,req_mode->dma_txreq);
-	
+
 	fLib_EnableDMAChannel(0);
 	fLib_DMA_WaitDMAInt(0);
-	fLib_DisableDMAChannel(0);  
- // md((UINT32)buf,BUFSIZ);	
+	fLib_DisableDMAChannel(0);
+ // md((UINT32)buf,BUFSIZ);
 }
 
 void i2s_dma(int base, UINT32 *buf, int dma_req, int len , int tx)
@@ -339,7 +339,7 @@ void i2s_dma(int base, UINT32 *buf, int dma_req, int len , int tx)
 	int priority = 0;
 	int hw = 1;
 	int mode = 2; //this is scu hardware handshake mode switch(0x50001000)
-	
+
 	//prepare data bufer for dmac020
 	if(tx == 1){ //playing
 		fLib_printf("@@tx %x\n",tx);
@@ -347,32 +347,32 @@ void i2s_dma(int base, UINT32 *buf, int dma_req, int len , int tx)
 		dst_width = 2;//dst width 8/16/32 bits -> 0/1/2
 		burst_size = 0;
 		src_ctrl = 0 ;// Inc/dec/fixed --> 0/1/2
-		dst_ctrl = 2 ;// Inc/dec/fixed --> 0/1/2		
+		dst_ctrl = 2 ;// Inc/dec/fixed --> 0/1/2
 	}
 	//switch system mode register
 	switch_mode_register(mode);
 	//send some data by using dma020 API;
-	
-  fLib_InitDMA(FALSE, FALSE, 0x0);	
-	fLib_DMA_ClearAllInterrupt(); 
-	fLib_DMA_EnableDMAInt(); //Enable DMA Interrupt			
+
+  fLib_InitDMA(FALSE, FALSE, 0x0);
+	fLib_DMA_ClearAllInterrupt();
+	fLib_DMA_EnableDMAInt(); //Enable DMA Interrupt
 
 	if(tx == 1)
 		fLib_DMA_NormalMode(0,(UINT32)buf, base + SSP_DATA, len, src_width , dst_width, burst_size, src_ctrl,dst_ctrl ,priority, hw,dma_req);
 	else //recording
 		fLib_DMA_NormalMode(0,base + SSP_DATA, (UINT32)buf, len, src_width , dst_width, burst_size, src_ctrl,dst_ctrl ,priority, hw,dma_req);
-	
+
 	fLib_EnableDMAChannel(0);
 	fLib_DMA_WaitDMAInt(0);
-	fLib_DisableDMAChannel(0);  
- // md((UINT32)buf,BUFSIZ);	
+	fLib_DisableDMAChannel(0);
+ // md((UINT32)buf,BUFSIZ);
 }
 
 void SPI2AHB_Find_DMA_REQ(UINT32 base, struct ssp_dma_req_mode *ptr)
 {
 	int choice;
 	char buf[64];
-	
+
 	switch(base)
 	{
 		case SPI_FTSSP010_0_PA_BASE:
@@ -380,59 +380,59 @@ void SPI2AHB_Find_DMA_REQ(UINT32 base, struct ssp_dma_req_mode *ptr)
 		  ptr->dma_rxreq = SSP_FTSSP010_0_DMA_RXREQ;
 		  ptr->mode = SSP_FTSSP010_0_DMA_MODE_MUX;
 			break;
-		
+
 		case SPI_FTSSP010_1_PA_BASE:
 			ptr->dma_txreq = SSP_FTSSP010_1_DMA_TXREQ;
 		  ptr->dma_rxreq = SSP_FTSSP010_1_DMA_RXREQ;
 		  ptr->mode = SSP_FTSSP010_1_DMA_MODE_MUX;
 			break;
-		
+
 		case SPI_FTSSP010_2_PA_BASE:
 			ptr->dma_txreq = SSP_FTSSP010_2_DMA_TXREQ;
-		  ptr->dma_rxreq = SSP_FTSSP010_2_DMA_RXREQ;		
+		  ptr->dma_rxreq = SSP_FTSSP010_2_DMA_RXREQ;
 		  ptr->mode = SSP_FTSSP010_2_DMA_MODE_MUX;
-		
+
 			break;
 		case SPI_FTSSP010_3_PA_BASE:
 		  switch(spi_choice){
 				case 1:
 					ptr->dma_txreq = SSP_FTSSP010_3_DMA_TXREQ;
-					ptr->dma_rxreq = SSP_FTSSP010_3_DMA_RXREQ;		
+					ptr->dma_rxreq = SSP_FTSSP010_3_DMA_RXREQ;
 					ptr->mode = SSP_FTSSP010_3_DMA_MODE_MUX;
 				break;
 				default:
 					ptr->dma_txreq = SSP_FTSSP010_3_DMA_TXREQ_MODE3;
-					ptr->dma_rxreq = SSP_FTSSP010_3_DMA_RXREQ_MODE3;		
-					ptr->mode = SSP_FTSSP010_3_DMA_MODE_MUX_MODE3;					
+					ptr->dma_rxreq = SSP_FTSSP010_3_DMA_RXREQ_MODE3;
+					ptr->mode = SSP_FTSSP010_3_DMA_MODE_MUX_MODE3;
 			}
-			
+
 			break;
-			
+
 		case SPI_FTSSP010_4_PA_BASE:
 		  switch(spi_choice){
 				case 1:
 					ptr->dma_txreq = SSP_FTSSP010_4_DMA_TXREQ;
-					ptr->dma_rxreq = SSP_FTSSP010_4_DMA_RXREQ;		
+					ptr->dma_rxreq = SSP_FTSSP010_4_DMA_RXREQ;
 					ptr->mode = SSP_FTSSP010_4_DMA_MODE_MUX;
 				break;
 				default:
 					ptr->dma_txreq = SSP_FTSSP010_4_DMA_TXREQ_MODE3;
-					ptr->dma_rxreq = SSP_FTSSP010_4_DMA_RXREQ_MODE3;		
-					ptr->mode = SSP_FTSSP010_4_DMA_MODE_MUX_MODE3;					
-			}			
+					ptr->dma_rxreq = SSP_FTSSP010_4_DMA_RXREQ_MODE3;
+					ptr->mode = SSP_FTSSP010_4_DMA_MODE_MUX_MODE3;
+			}
 			break;
-			
+
 		case SPI_FTSSP010_5_PA_BASE:
 			ptr->dma_txreq = SSP_FTSSP010_5_DMA_TXREQ;
-		  ptr->dma_rxreq = SSP_FTSSP010_5_DMA_RXREQ;		
+		  ptr->dma_rxreq = SSP_FTSSP010_5_DMA_RXREQ;
 		  ptr->mode = SSP_FTSSP010_5_DMA_MODE_MUX;
 			break;
-		
+
 		case SPI_FTSSP010_6_PA_BASE:
 			ptr->dma_txreq = SSP_FTSSP010_6_DMA_TXREQ;
-		  ptr->dma_rxreq = SSP_FTSSP010_6_DMA_RXREQ;		
+		  ptr->dma_rxreq = SSP_FTSSP010_6_DMA_RXREQ;
 		  ptr->mode = SSP_FTSSP010_6_DMA_MODE_MUX;
-			break;				
+			break;
 	}
 	//fLib_printf("%s txreq %x rxreq %x mode %x\n",__func__,ptr->dma_txreq,ptr->dma_rxreq,ptr->mode);
 }
@@ -443,7 +443,7 @@ void SPI2AHB_Read_Dma(UINT32 base, UINT32 *buf, UINT32 byte_addr)
 	UINT32 tx_buf[3];
 	struct ssp_dma_req_mode req_mode;
 	int tx;
-	
+
 	ftssp010_clear_txfifo(base);
 	ftssp010_clear_rxfifo(base);
 	fLib_SetSSP_DMA(base, 1,0);
@@ -451,9 +451,9 @@ void SPI2AHB_Read_Dma(UINT32 base, UINT32 *buf, UINT32 byte_addr)
 	i = 0;
 	while(!ftssp010_txfifo_not_full(base))
 		;
-	
-	tx_buf[0] = 0x11223344;	
-	tx_buf[1] = 0x0;	
+
+	tx_buf[0] = 0x11223344;
+	tx_buf[1] = 0x0;
 	tx_buf[2] = HSPI_RD_CMD | ((byte_addr + i*4) >> 1);
 #if 0
 	outw(base + FTSSP010_REG_DATA_PORT, tx_buf[0]); // Dummy
@@ -463,27 +463,27 @@ void SPI2AHB_Read_Dma(UINT32 base, UINT32 *buf, UINT32 byte_addr)
 //Enable SSP1
 	fLib_SetSSP_Enable(base, 1);
 	SPI2AHB_Find_DMA_REQ(base, &req_mode);
-	
+
 	tx = 1;
   spi2ahb_dma_read(base, tx_buf,&req_mode, 12, tx);
 //Enable SSP1
 	fLib_SetSSP_Enable(base, 0);
-		
-#endif	
-	i = 0;	
-	
+
+#endif
+	i = 0;
+
 	ftssp010_enable_FS(base, 1, 1, 0);
 	outw(base + FTSSP010_REG_DATA_PORT, 0); // addr + wr_buf
 	while (!ftssp010_rxfifo_valid_entries(base))
-		;		
-	
-#if 0	
+		;
+
+#if 0
 	tmp1 = (UINT32)(inw(base + FTSSP010_REG_DATA_PORT)); // Dummy read
 	buf[i] = (UINT32)(inw(base + FTSSP010_REG_DATA_PORT)); // Real data
 	ftssp010_enable_FS(base, 0, 0, 1);
 
 	buf[i] = (buf[i]<<1) | ((tmp1 & 0x80000000)? 0x1:0x0);
-	
+
 #else
 	tx = 0; //read from ssp
 	spi2ahb_dma_read(base, buf, &req_mode, 8, tx);
@@ -496,16 +496,16 @@ void SPI2AHB_Read(UINT32 base, UINT32 *buf, UINT32 byte_addr)
 {
 	UINT32 i, tmp1, tmp2;
 	UINT32 read_cmd1, read_cmd2;
-	
+
 	ftssp010_clear_txfifo(base);
 	ftssp010_clear_rxfifo(base);
-	
+
 	i = 0;
 	while(!ftssp010_txfifo_not_full(base))
 		;
-	
+
 	read_cmd1 = HSPI_RD_CMD | ((byte_addr + i*4) >> 1);
-	read_cmd2 = 0x0;	
+	read_cmd2 = 0x0;
 #if 1
 	outw(base + FTSSP010_REG_DATA_PORT, 0x112233ff); // Dummy
 	outw(base + FTSSP010_REG_DATA_PORT, read_cmd2); // read CMD
@@ -514,16 +514,16 @@ void SPI2AHB_Read(UINT32 base, UINT32 *buf, UINT32 byte_addr)
 	outw(base + FTSSP010_REG_DATA_PORT, read_cmd1); // read CMD
 	outw(base + FTSSP010_REG_DATA_PORT, read_cmd2); // read CMD
 	outw(base + FTSSP010_REG_DATA_PORT, 0x112233ff); // Dummy
-	
 
 
-	#endif	
-	
+
+	#endif
+
 	ftssp010_enable_FS(base, 1, 1, 0);
 	outw(base + FTSSP010_REG_DATA_PORT, 0); // addr + wr_buf
 	while (!ftssp010_rxfifo_valid_entries(base))
-		;		
-	
+		;
+
 #if 1
 	tmp1 = (UINT32)(inw(base + FTSSP010_REG_DATA_PORT)); // Dummy read
 	buf[i] = (UINT32)(inw(base + FTSSP010_REG_DATA_PORT)); // Real data
@@ -542,28 +542,28 @@ void SPI2AHB_Multi_Read(UINT32 base, UINT32 *buf, UINT32 byte_addr, UINT32 num)
 {
 	UINT32 i, tmp1, tmp2;
 	UINT32 cur_addr, read_cmd1, read_cmd2;
-	
+
   for(i=0;i<num;i++)
-	{    
+	{
 		ftssp010_clear_txfifo(base);
 		ftssp010_clear_rxfifo(base);
 		cur_addr=byte_addr+i;
-		
+
 		while(!ftssp010_txfifo_not_full(base))
 			;
-		
+
 		read_cmd1 = HSPI_RD_CMD | ((byte_addr + i*4) >> 1);
-		read_cmd2 = 0x0;	
+		read_cmd2 = 0x0;
 
 		outw(base + FTSSP010_REG_DATA_PORT, 0x112233ff); // Dummy
 		outw(base + FTSSP010_REG_DATA_PORT, read_cmd2); // read CMD
 		outw(base + FTSSP010_REG_DATA_PORT, read_cmd1); // read CMD
-		
+
 		ftssp010_enable_FS(base, 1, 1, 0);
 		outw(base + FTSSP010_REG_DATA_PORT, 0); // addr + wr_buf
 		while (!ftssp010_rxfifo_valid_entries(base))
-			;		
-		
+			;
+
 		tmp1 = (UINT32)(inw(base + FTSSP010_REG_DATA_PORT)); // Dummy read
 		buf[i] = (UINT32)(inw(base + FTSSP010_REG_DATA_PORT)); // Real data
 
@@ -609,15 +609,15 @@ void ftssp010_read_word(int base, void *buf, int wsize)
 	if (buf) {
 		switch (wsize) {
 		case 1:
-			*(UINT8 *) buf = data;		  
+			*(UINT8 *) buf = data;
 			break;
 
 		case 2:
-			*(UINT16 *) buf = data;		
+			*(UINT16 *) buf = data;
 			break;
 
 		default:
-			*(UINT32 *) buf = data;		
+			*(UINT32 *) buf = data;
 			break;
 		}
 	}
@@ -673,11 +673,11 @@ fLib_printf("rxfifo=%x\n",rxfifo);
 	return count;
 }
 
-void ftssp010_enable_dma(tx_addr)
+void ftssp010_enable_dma(int tx_addr)
 {
 	int val;
-	
-	val = inw(tx_addr+ SSP_INT_CONTROL);	
+
+	val = inw(tx_addr+ SSP_INT_CONTROL);
 	val |= 0x01<<5 ; //enable tx/rx
 	outw( tx_addr+SSP_INT_CONTROL, val);
 }
@@ -691,14 +691,14 @@ int ftssp010_fill_in_fifo_dma(int tx_addr, const void *buf,
 	int burst_size = 0;
 	int src_ctrl = 0 ;// Inc/dec/fixed --> 0/1/2
 	int dst_ctrl = 2 ;// Inc/dec/fixed --> 0/1/2
-	int priority = 0;	
+	int priority = 0;
 	int rxfifo = ftssp010_rxfifo_depth(rx_addr);
 	int dma_req = 10;
 	int hw = 0;
 	int transfer_len;
 	int tx;
-	
-	
+
+
 	if(*len > rxfifo)
 		transfer_len = rxfifo;
 	else
@@ -712,18 +712,18 @@ int ftssp010_fill_in_fifo_dma(int tx_addr, const void *buf,
   //enable sspdma
 	ftssp010_enable_dma(tx_addr);
 	//enable dmac020
-  fLib_InitDMA(FALSE, FALSE, 0x0);	
-	fLib_DMA_ClearAllInterrupt(); 
-	fLib_DMA_EnableDMAInt(); //Enable DMA Interrupt			
+  fLib_InitDMA(FALSE, FALSE, 0x0);
+	fLib_DMA_ClearAllInterrupt();
+	fLib_DMA_EnableDMAInt(); //Enable DMA Interrupt
 	fLib_DMA_NormalMode(0,(UINT32)buf, tx_addr + FTSSP010_REG_DATA_PORT ,transfer_len , src_width , dst_width, burst_size, src_ctrl,dst_ctrl ,priority, hw,dma_req);
 	// Always enable rxside before txside
 //	tx = (tx_addr == FTSSP010_REG_BASE_S)? 1 : 0;
 	//ftssp010_enable(FTSSP010_REG_BASE_S, tx, !tx);
-//	ftssp010_enable(FTSSP010_REG_BASE_M, !tx, tx);	
+//	ftssp010_enable(FTSSP010_REG_BASE_M, !tx, tx);
 	fLib_EnableDMAChannel(0);
 
 	fLib_DMA_WaitDMAInt(0);
-	fLib_DisableDMAChannel(0);  	
+	fLib_DisableDMAChannel(0);
   fLib_printf("over\n");
 	*len -= transfer_len;
 	return transfer_len;
@@ -922,23 +922,23 @@ void ftssp010_spi_slave_init(int cr0)
 {
 	int cr1;
 	int intr_cr;
-	
+
 	ftssp010_ssp_reset(FTSSP010_REG_BASE_S);
 
 	cr0 = cr0 | (FTSSP010_CR0_FFMT_SPI | FTSSP010_CR0_SLV_SPI);
 	outl(cr0, FTSSP010_REG_BASE_S + FTSSP010_REG_CR0);
 
-	ftssp010_set_sclkdiv(FTSSP010_REG_BASE_S); 
-	
-	
+	ftssp010_set_sclkdiv(FTSSP010_REG_BASE_S);
+
+
 	ftssp010_clear_rxfifo(FTSSP010_REG_BASE_S);
 
 	ftssp010_set_data_length(FTSSP010_REG_BASE_S, 1);
 
 	ftssp010_set_pcl(FTSSP010_REG_BASE_S, pcl);
-	
-	
-	
+
+
+
 	fLib_printf(" Slave CR0 0x%x\n", inl(FTSSP010_REG_BASE_S +
 				       FTSSP010_REG_CR0));
 	fLib_printf(" Slave CR1 0x%x\n", inl(FTSSP010_REG_BASE_S +
@@ -947,20 +947,20 @@ void ftssp010_spi_slave_init(int cr0)
 				       FTSSP010_REG_CR2));
 	fLib_printf(" Slave CR3 0x%x\n", inl(FTSSP010_REG_BASE_S +
 				       FTSSP010_REG_CR3));
-#if 1			 
+#if 1
 	intr_cr = inl(FTSSP010_REG_BASE_S + FTSSP010_REG_INTR_CR);
 	intr_cr &= ~(FTSSP010_INTCR_TFDMAEN);
 	intr_cr |= (FTSSP010_INTCR_RFDMAEN);
 	intr_cr &= ~(FTSSP010_INTCR_RFTHOD_MASK);
 	intr_cr |= FTSSP010_INTCR_RFTHOD(1);
 	outl(intr_cr, FTSSP010_REG_BASE_S + FTSSP010_REG_INTR_CR);
-	
+
 	fLib_printf(" Slave INTR_CR 0x%x\n", inl(FTSSP010_REG_BASE_S +
 				       FTSSP010_REG_INTR_CR));
-							 
+
 	ftssp010_enable(FTSSP010_REG_BASE_S, 0, 1);
 #endif
-							 
+
 }
 
 void ftssp010_spi_master_init(int cr0)
@@ -970,14 +970,14 @@ void ftssp010_spi_master_init(int cr0)
 	cr0 = cr0 | (FTSSP010_CR0_FFMT_SPI | FTSSP010_CR0_MSTR_SPI);
 	outl(cr0, FTSSP010_REG_BASE_M + FTSSP010_REG_CR0);
 
-	ftssp010_set_sclkdiv(FTSSP010_REG_BASE_M); 
-	
+	ftssp010_set_sclkdiv(FTSSP010_REG_BASE_M);
+
 	ftssp010_enable(FTSSP010_REG_BASE_M, 0, 0);
 
 	ftssp010_set_data_length(FTSSP010_REG_BASE_M, sdl_in_bytes);
 
 	ftssp010_set_pcl(FTSSP010_REG_BASE_M, pcl);
-	
+
 	fLib_printf(" Master CR0 0x%x\n", inl(FTSSP010_REG_BASE_M +
 					FTSSP010_REG_CR0));
 	fLib_printf(" Master CR1 0x%x\n", inl(FTSSP010_REG_BASE_M +
@@ -992,7 +992,7 @@ void ftssp010_spi_master_init(int cr0)
  * Enable Slave before Master
  *
  * cs_low equals to 0 means  frame/sync(chip select) active low.
- * lsb equals to 0 means MSB tx first. 
+ * lsb equals to 0 means MSB tx first.
  */
 char *mode_string[SPI_MODE_MAX] = { "CLKPO = 0, CLKPHA = 0",
 				    "CLKPO = 0, CLKPHA = 1",
@@ -1045,23 +1045,23 @@ void ftssp010_spi_slave_dma_read(int base, uint8_t *buf, int len)
 	int src_ctrl = 2 ;// Inc/dec/fixed --> 0/1/2
 	int dst_ctrl = 0 ;// Inc/dec/fixed --> 0/1/2
 	int priority = 0;
-	int hw = 1;	
+	int hw = 1;
 
 	//send some data by using dma020 API;
-	
-  fLib_InitDMA(FALSE, FALSE, 0x0);	
-	fLib_DMA_ClearAllInterrupt(); 
-	fLib_DMA_EnableDMAInt(); //Enable DMA Interrupt			
+
+  fLib_InitDMA(FALSE, FALSE, 0x0);
+	fLib_DMA_ClearAllInterrupt();
+	fLib_DMA_EnableDMAInt(); //Enable DMA Interrupt
 
 	fLib_DMA_NormalMode(0,base+0x18, (UINT32)buf, len, src_width , dst_width, burst_size, src_ctrl,dst_ctrl ,priority, hw, 11);
-	
-	
-	
+
+
+
 	fLib_EnableDMAChannel(0);
-	
+
 	//fLib_DMA_WaitDMAInt(0);
-	//fLib_DisableDMAChannel(0);  
-	
+	//fLib_DisableDMAChannel(0);
+
 }
 
 
@@ -1077,23 +1077,23 @@ void link_dma(int base, uint8_t *buf, int len)
 	int src_ctrl = 2 ;// Inc/dec/fixed --> 0/1/2
 	int dst_ctrl = 0 ;// Inc/dec/fixed --> 0/1/2
 	int priority = 0;
-	int hw = 1;	
+	int hw = 1;
 
 	//send some data by using dma020 API;
-	
+
 	fLib_printf("%p\n",dma_llp);
-	
-  fLib_InitDMA(FALSE, FALSE, 0x0);	
-	fLib_DMA_ClearAllInterrupt(); 
-	fLib_DMA_EnableDMAInt(); //Enable DMA Interrupt			
+
+  fLib_InitDMA(FALSE, FALSE, 0x0);
+	fLib_DMA_ClearAllInterrupt();
+	fLib_DMA_EnableDMAInt(); //Enable DMA Interrupt
 
 	//fLib_DMA_NormalMode(0,base+0x18, (UINT32)buf, len, src_width , dst_width, burst_size, src_ctrl,dst_ctrl ,priority, hw, 11);
-	
+
 	fLib_DMA_LinkMode(0,(UINT32)dma_llp,2,0x50120000, 0x50126000, 1023, src_width, dst_width, burst_size, src_ctrl, dst_ctrl, priority, hw, 11);
-	
+
 	fLib_EnableDMAChannel(0);
-	
+
 	//fLib_DMA_WaitDMAInt(0);
-	//fLib_DisableDMAChannel(0);  
-	
+	//fLib_DisableDMAChannel(0);
+
 }
