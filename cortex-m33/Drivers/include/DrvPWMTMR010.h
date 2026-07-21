@@ -18,17 +18,17 @@
 typedef enum {
     DRVPWMTMR1=1,
     DRVPWMTMR2=2,
-    DRVPWMTMR3=3, 
+    DRVPWMTMR3=3,
     DRVPWMTMR4=4,
     DRVPWMTMR5=5,
     DRVPWMTMR6=6,
-    DRVPWMTMR7=7, 
+    DRVPWMTMR7=7,
     DRVPWMTMR8=8
 } DRVTIMER;
 
 
 typedef struct
-{	
+{
 	UINT32 TmSrc:1;	/* bit 0 */
 	UINT32 TmStart:1;
 	UINT32 TmUpdate:1;
@@ -36,14 +36,14 @@ typedef struct
 	UINT32 TmAutoLoad:1;
 	UINT32 TmIntEn:1;
 	UINT32 TmIntMode:1;
-	UINT32 TmDmaEn:1;	
+	UINT32 TmDmaEn:1;
 	UINT32 TmPwmEn:1;	/* bit 8 */
 	UINT32 Reserved:15;	/* bit 9~23 */
 	UINT32 TmDeadZone:8;	/* bit 24~31 */
 }fLib_TimerControl;
 
 typedef struct
-{	
+{
 			UINT32 Counter;
 }fLib_CNTB;
 
@@ -63,15 +63,15 @@ typedef struct
 	UINT32 Tm3Match1:1;
 	UINT32 Tm3Match2:1;
 	UINT32 Tm3Overflow:1;
-	UINT32 Reserved;	
+	UINT32 Reserved;
 }fLib_TimerMask;
 
 
-typedef struct 
+typedef struct
 {
-    UINT32 IntNum;           /* interrupt number */   
-    UINT32 Tick;        /* Tick Per Second */   
-    UINT32 Running;       /* Is timer running */       
+    UINT32 IntNum;           /* interrupt number */
+    UINT32 Tick;        /* Tick Per Second */
+    UINT32 Running;       /* Is timer running */
 }fLib_TimerStruct;
 
 
@@ -84,7 +84,7 @@ typedef struct
 #define PWMTMR_20MSEC_PERIOD			(UINT32)(APB_CLK/50)
 #define PWMTMR_15MSEC_PERIOD			(UINT32)(((APB_CLK/100)*3)/2)
 #define PWMTMR_10MSEC_PERIOD			(UINT32)(APB_CLK/100)
-#define PWMTMR_1MSEC_PERIOD				(UINT32)(APB_CLK/1000)
+#define PWMTMR_1MSEC_PERIOD			(UINT32)(APB_CLK/1000)
 
 typedef enum Timer_IoType
 {
@@ -126,7 +126,7 @@ typedef struct  {
 	uint32_t ctrl; /* control mask */
 	uint32_t reload; /* reload value for periodic timer */
 	//struct clk	*clk;
-	//void __iomem *mmio;	
+	//void __iomem *mmio;
 }ftpwmtmr010_pwm_chip;
 
 
@@ -136,7 +136,7 @@ typedef struct  {
  *   API
  *  -------------------------------------------------------------------------------
  */
- 
+
 //this routines will export to upper ap or test program
 //extern BOOL fLib_Timer_Init(DRVTIMER timer, UINT32 tick);
 

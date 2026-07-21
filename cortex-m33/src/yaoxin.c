@@ -49,14 +49,26 @@ static const char *yaoxin_type_str(uint8 type)
 	}
 }
 
+/*
+ * 时标换算（T4_Tick 必须为真实 1ms）：
+ *   绝对时间 = 同步时的 Unix 时间 + (当前 tick - 同步时 tick)
+ *
+ * 注意：不要写成 sec += elapsed_ms（会把毫秒当成秒，快 1000 倍）。
+ */
 static void yaoxin_get_timestamp(uint32 now_ms,
 				 uint32 *sec, uint32 *usec)
 {
 	uint32 elapsed_ms = now_ms - g_time_base_ms;
-	uint32 elapsed_us = elapsed_ms * 1000U + g_time_base_us;
+	uint32 add_sec;
+	uint32 add_us;
+	uint32 total_us;
 
-	*sec = g_time_base_sec + elapsed_us / 1000000U;
-	*usec = elapsed_us % 1000000U;
+	add_sec = elapsed_ms / 1000U;
+	add_us = (elapsed_ms % 1000U) * 1000U;
+
+	total_us = g_time_base_us + add_us;
+	*sec = g_time_base_sec + add_sec + total_us / 1000000U;
+	*usec = total_us % 1000000U;
 }
 
 static uint8 yaoxin_pin_to_type(uint32 gpio_pin)
@@ -218,14 +230,17 @@ void yaoxin_debug_poll(void)
 {
 	uint32 now_ms = yaoxin_now_ms();
 	uint32 gpio_data;
+	int i;
 
 	if ((now_ms - g_debug_last_ms) < 2000)
 		return;
 	g_debug_last_ms = now_ms;
 
 	gpio_data = fLib_Gpio_ReadData(GPIO_FTGPIO010_PA_BASE);
+
 	fLib_printf("[yaoxin] poll tick=%u synced=%u debounce=%ums\n",
 		    now_ms, g_time_synced, g_debounce_ms);
+	fLib_printf("[yaoxin] (poll every 2000 ticks ~= 2s if 1ms/tick)\n");
 	fLib_printf("[yaoxin] GPIO0_11=%u cnt=%u  GPIO0_12=%u cnt=%u  GPIO0_13=%u cnt=%u\n",
 		    (gpio_data >> YAOXIN_PIN_DOOR) & 1U,
 		    g_trigger_count[YAOXIN_PIN_DOOR],
@@ -239,17 +254,17 @@ void yaoxin_init(void)
 {
 	uint32 gpio_data;
 
-	/* 调试串口 UART2，115200 8N1 */
+	/* 初始化调试串口 115200 8N1 */
 	fLib_SerialInit(DEBUG_CONSOLE, DEFAULT_CONSOLE_BAUD, PARITY_NONE, 0, 8);
 
 	memset((void *)iRAM_DATA_BASE, 0x00, IPC_SHARE_SRAM_SIZE);
 	memset(g_trigger_count, 0, sizeof(g_trigger_count));
 	memset(g_last_trigger_ms, 0, sizeof(g_last_trigger_ms));
 
-	fLib_printf("[yaoxin] init start, uart=%u baud=%u\n",
-		    DEBUG_CONSOLE, DEFAULT_CONSOLE_BAUD);
-
+	/* PWMTMR_1MSEC_PERIOD == APB_CLK/1000，依赖 system_leo.h 中 APB_CLK 正确 */
 	fLib_Timer_Init(DRVPWMTMR4, PWMTMR_1MSEC_PERIOD);
+	fLib_printf("[yaoxin] timer reload=%u (APB_CLK=%u), expect 1ms/tick\n",
+		    (unsigned)PWMTMR_1MSEC_PERIOD, (unsigned)APB_CLK);
 
 	yaoxin_gpio_configure(YAOXIN_PIN_SIGNAL1);
 	yaoxin_gpio_configure(YAOXIN_PIN_SIGNAL2);

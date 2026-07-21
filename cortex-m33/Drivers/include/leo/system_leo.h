@@ -9,9 +9,9 @@
  * Copyright (C) 2010-2011 ARM Limited. All rights reserved.
  *
  * @par
- * ARM Limited (ARM) is supplying this software for use with Cortex-M 
- * processor based microcontrollers.  This file can be freely distributed 
- * within development tools that are supporting such ARM based processors. 
+ * ARM Limited (ARM) is supplying this software for use with Cortex-M
+ * processor based microcontrollers.  This file can be freely distributed
+ * within development tools that are supporting such ARM based processors.
  *
  * @par
  * THIS SOFTWARE IS PROVIDED "AS IS".  NO WARRANTIES, WHETHER EXPRESS, IMPLIED
@@ -71,17 +71,18 @@ extern "C" {
 #define	SDC_DMA_REQ								15
 
 #define SSP_CLK					12288000			// for all SSPs
-#define UART_CLOCK				58823529
-#define CPU_CLK					48000000			// 48Mhz
-#define AHB_CLK					650000//25000000			// 48Mhz
-#define APB_CLK					AHB_CLK
+#define UART_CLOCK				58982400
+#define CPU_CLK					150000000			// 48Mhz
+
+#define AHB_CLK					150000000
+#define APB_CLK					100000000
 #define APB_CLOCK				APB_CLK
 #define I2C_CLOCK				100000000//25000000
 #define UART_CLOCK_2			(UART_CLOCK)
 #define NR_IRQS				64
 #define WDT011_CLK     100000000//PCLK
 
-#define I2S_TOTAL_SIZE		0x400//0x4000//0x2000			
+#define I2S_TOTAL_SIZE		0x400//0x4000//0x2000
 
 //#define MEMTEST
 /* define which items need to be tested */

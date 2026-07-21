@@ -159,8 +159,21 @@ static inline int ffs(int x)
 
 
 /* type define */
+#if defined(__GNUC__)
+	#include <stdint.h>
+	typedef uint64_t				UINT64;
+	typedef int64_t					INT64;
+	typedef	uint32_t				UINT32;
+	typedef	uint32_t				uint32;
+	typedef	int32_t					INT32;
+	typedef	uint16_t				UINT16;
+	typedef	int16_t					INT16;
+	typedef uint8_t					UINT8;
+	typedef uint8_t					uint8;
+	typedef int8_t					INT8;
+#else
 	typedef unsigned long long 		UINT64;
-	typedef long long 				INT64;
+	typedef long long 			INT64;
 	typedef	unsigned int			UINT32;
 	typedef	unsigned int			uint32;
 	typedef	int						INT32;
@@ -169,6 +182,7 @@ static inline int ffs(int x)
 	typedef unsigned char			UINT8;
 	typedef unsigned char			uint8;
 	typedef char					INT8;
+#endif
 	typedef unsigned char			BOOL;
 	typedef unsigned char 			BOOLEAN;
 

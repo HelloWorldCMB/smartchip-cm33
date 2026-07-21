@@ -78,7 +78,7 @@ typedef struct {
 #define YAOXIN_TYPE_SIGNAL2	1
 #define YAOXIN_TYPE_DOOR	2
 
-#define YAOXIN_DEBOUNCE_MS_DEFAULT	30
+#define YAOXIN_DEBOUNCE_MS_DEFAULT	30 // 消抖时间，单位毫秒
 
 typedef struct {
 	uint32_t gpio_bank;		/* 固定为 0，对应 GPIO0_xx */

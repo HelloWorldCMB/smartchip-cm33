@@ -1,5 +1,5 @@
-#ifndef __SERIAL_H 
-#define __SERIAL_H 
+#ifndef __SERIAL_H
+#define __SERIAL_H
 
 //#include "FIE31XX.h"
 #include "types.h"
@@ -17,19 +17,19 @@
   */
 
 typedef struct {                                    /*!< FT_UART0 Structure                                                    */
-  
+
   union {
     __IO UINT32  DLL;                             /*!< Offset:0x00 UARTn Baud Rate Divisor Latch Least Significant
                                                          Byte                                                                  */
     __O  UINT32  THR;                             /*!< Offset:0x00 UARTn Transmit Holding Register                           */
     __I  UINT32  RBR;                             /*!< Offset:0x00 UARTn Receiver Buffer Register                            */
   };
-  
+
   union {
     __IO UINT32  DLM;                             /*!< Offset:0x04 UARTn Baud Rate Divisor Latch Most Significant Byte       */
     __IO UINT32  IER;                             /*!< Offset:0x04 UARTn Interrupt Enable Register                           */
   };
-  
+
   union {
     __IO UINT32  PSR;                             /*!< Offset:0x08 UARTn Prescalerl Register                                 */
     __O  UINT32  FCR;                             /*!< Offset:0x08 UARTn FIFO Control Register                               */
@@ -37,7 +37,7 @@ typedef struct {                                    /*!< FT_UART0 Structure     
   };
   __IO UINT32  LCR;                               /*!< Offset:0x0C UARTn Line Control Register                               */
   __IO UINT32  MCR;                               /*!< Offset:0x10 UARTn Modem Control Register                              */
-  
+
   union {
     __O  UINT32  TST;                             /*!< Offset:0x14 UARTn Testing Register                                    */
     __I  UINT32  LSR;                             /*!< Offset:0x14 UARTn Line Status Register                                */
@@ -51,7 +51,7 @@ typedef struct {                                    /*!< FT_UART0 Structure     
   __IO UINT32  MRXLENL;                           /*!< Offset:0x30 UARTn Maximum Receiver Frame Length Low                   */
   __IO UINT32  MRXLENH;                           /*!< Offset:0x34 UARTn Maximum Receiver Frame Length High                  */
   __IO UINT32  PLR;                               /*!< Offset:0x38 UARTn FIR Preamble Length Register                        */
-  
+
   union {
     __I  UINT32  FMIIR_DMA;                       /*!< Offset:0x3C UARTn FIR Mode Interrupt Identification Register
                                                          in the DMA mode                                                       */
@@ -64,7 +64,7 @@ typedef struct {                                    /*!< FT_UART0 Structure     
 typedef enum {
     DRVUART_PORT0=0,
     DRVUART_PORT1=1,
-    DRVUART_PORT2=2,   
+    DRVUART_PORT2=2,
     DRVUART_PORT3=3,
 		DRVUART_PORT4=4,
 	  DRVUART_PORT5=5,
@@ -178,7 +178,7 @@ extern FT_UART0_Type * UART_PORT[DRVUART_MAX_UART];
 
 #define BAUD_921600           			(921600)
 #define BAUD_115200                 (115200)
-#define BAUD_57600                  (57600) 
+#define BAUD_57600                  (57600)
 #define BAUD_38400				    			(38400)
 #define BAUD_19200                  (19200)
 #define BAUD_14400                  (14400)
@@ -187,7 +187,7 @@ extern FT_UART0_Type * UART_PORT[DRVUART_MAX_UART];
 #define BAUD_2400                   (2400)
 #define BAUD_1200                   (1200)
 
-#define DEBUG_CONSOLE              	DRVUART_PORT2
+#define DEBUG_CONSOLE              	DRVUART_PORT6
 #define DEFAULT_CONSOLE_BAUD        BAUD_115200
 
 #ifndef PARITY_NONE
@@ -269,4 +269,4 @@ extern void fLib_DebugPrintChar(DRVUART_PORT port_no, char ch);
 extern void fLib_DebugPrintString(DRVUART_PORT port_no, char *str);
 extern char fLib_DebugGetChar(DRVUART_PORT port_no);
 extern UINT32 fLib_DebugGetUserCommand(DRVUART_PORT port_no, UINT8 * buffer, UINT32 Len);
-#endif // __SERIAL_H 
+#endif // __SERIAL_H

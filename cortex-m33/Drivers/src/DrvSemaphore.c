@@ -7,7 +7,9 @@
 #include "string.h"
 #include "ipc.h"
 
+#if !defined(__GNUC__)
 extern int ffs(unsigned int val);
+#endif
 void Semaphore_Handler(void)
 {
 	UINT32 val, channel, i;
@@ -17,7 +19,11 @@ void Semaphore_Handler(void)
 	if ((val>>16)&0xffff) {
 		outw(SEMAPHORE_PA_BASE + 0x104, inw(SEMAPHORE_PA_BASE + 0x104));
 	}
+#if defined(__GNUC__)
+	channel = (UINT32)__builtin_ffs((int)((val>>16)&0xffff)) - 1;
+#else
 	channel = ffs((val>>16)&0xffff) -1;
+#endif
 	
 	if (channel == 1)
 		return;
