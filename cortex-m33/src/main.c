@@ -23,7 +23,7 @@ int main(void)
 	yaoxin_init();
 
 	while (1) {
-		yaoxin_debug_poll();
+		// yaoxin_debug_poll();
 		__WFI();
 	}
 }

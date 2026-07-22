@@ -49,6 +49,7 @@ typedef struct {
 
 #define IPC_CMD_SET_TIME	0x01	/* 下发时间基准，供小核打时标 */
 #define IPC_CMD_SET_PARAM	0x02	/* 下发消抖等参数 */
+#define IPC_CMD_ALLOW_DBG	0x03	/* 打开调试打印 */
 #define IPC_CMD_ACK		0x80	/* 小核确认帧 */
 
 typedef struct {
@@ -239,6 +240,18 @@ static int yaoxin_set_debounce(int fd,
 					 sizeof(ipc_set_param_t));
 }
 
+static int yaoxin_allow_debug(int fd,
+			       ipc_data_area_t *send_buf,
+			       ipc_data_area_t *recv_buf)
+{
+	ipc_cmd_hdr_t *hdr;
+	hdr = (ipc_cmd_hdr_t *)send_buf->data;
+	hdr->cmd = IPC_CMD_ALLOW_DBG;
+	hdr->seq = ++g_cmd_seq;
+
+	return ipc_cfg_send_and_wait_ack(fd, send_buf, recv_buf, 0);
+}
+
 /* 遥信初始化：同步时间 + 设置默认消抖 */
 static int yaoxin_init_cfg(int fd,
 			   ipc_data_area_t *send_buf,
@@ -398,6 +411,7 @@ int main(int argc, char **argv)
 		printf("2: 监听遥信事件（通道1）\n");
 		printf("3: 发送原始数据（调试）\n");
 		printf("4: 接收原始数据（调试）\n");
+		printf("5: 打开小核调试打印（调试）\n");
 		printf("================================\n");
 		printf("请选择: ");
 
@@ -422,6 +436,9 @@ int main(int argc, char **argv)
 			break;
 		case 4:
 			ipc_raw_recv(fd, recv_ipc_data);
+			break;
+		case 5:
+			yaoxin_allow_debug(fd, send_ipc_data, recv_ipc_data);
 			break;
 		default:
 			printf("无效选项\n");

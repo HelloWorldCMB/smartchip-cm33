@@ -8,6 +8,8 @@
 #include "DrvUART010.h"
 #include "leo_cm33.h"
 
+#define YAOXIN_GPIO_POLARITY		0 //0:Active Low， 1:Active High
+
 extern volatile UINT32 T4_Tick;
 
 static uint32 g_time_base_sec;
@@ -18,6 +20,7 @@ static uint32 g_debounce_ms = YAOXIN_DEBOUNCE_MS_DEFAULT;
 static uint32 g_trigger_count[32];
 static uint32 g_last_trigger_ms[32];
 static uint32 g_debug_last_ms;
+static uint32 yaoxin_allow_debug = 0;
 
 static ipc_data_area_t *ipc_channel_addr(unsigned int channel)
 {
@@ -50,10 +53,7 @@ static const char *yaoxin_type_str(uint8 type)
 }
 
 /*
- * 时标换算（T4_Tick 必须为真实 1ms）：
  *   绝对时间 = 同步时的 Unix 时间 + (当前 tick - 同步时 tick)
- *
- * 注意：不要写成 sec += elapsed_ms（会把毫秒当成秒，快 1000 倍）。
  */
 static void yaoxin_get_timestamp(uint32 now_ms,
 				 uint32 *sec, uint32 *usec)
@@ -85,9 +85,17 @@ static uint8 yaoxin_pin_to_type(uint32 gpio_pin)
 	}
 }
 
-static uint32 yaoxin_read_pin_level(uint32 gpio_pin)
+static uint32 read_pin_level(uint32 gpio_pin)
 {
 	return (fLib_Gpio_ReadData(GPIO_FTGPIO010_PA_BASE) >> gpio_pin) & 1U;
+}
+
+static uint32_t yaoxin_state_get(uint32_t gpio_pin)
+{
+	if (!YAOXIN_GPIO_POLARITY)
+		return read_pin_level(gpio_pin) ? 0 : 1;
+	else
+		return read_pin_level(gpio_pin) ? 1 : 0;
 }
 
 static void yaoxin_gpio_configure(uint32 gpio_pin)
@@ -95,7 +103,7 @@ static void yaoxin_gpio_configure(uint32 gpio_pin)
 	fLib_SetGpioDir(GPIO_FTGPIO010_PA_BASE, gpio_pin, GPIO_DIR_INPUT);
 	fLib_SetGpioEdgeMode(GPIO_FTGPIO010_PA_BASE, gpio_pin, BOTH);
 	fLib_SetGpioTrigger(GPIO_FTGPIO010_PA_BASE, gpio_pin, GPIO_EDGE);
-	fLib_SetGpioActiveMode(GPIO_FTGPIO010_PA_BASE, gpio_pin, GPIO_Rising);
+	// fLib_SetGpioActiveMode(GPIO_FTGPIO010_PA_BASE, gpio_pin, GPIO_Falling);
 	fLib_EnableGpioBounce(GPIO_FTGPIO010_PA_BASE, gpio_pin,
 			      APB_CLOCK / 12000);
 	fLib_ClearGpioInt(GPIO_FTGPIO010_PA_BASE, 1u << gpio_pin);
@@ -132,13 +140,15 @@ void yaoxin_send_event(uint32 gpio_pin)
 	event->gpio_pin = gpio_pin;
 	event->yaoxin_type = yaoxin_pin_to_type(gpio_pin);
 	event->count = g_trigger_count[gpio_pin];
-	event->status = yaoxin_read_pin_level(gpio_pin);
+	event->status = yaoxin_state_get(gpio_pin);
 	yaoxin_get_timestamp(now_ms, &event->timestamp, &event->timestamp_us);
 
-	fLib_printf("[yaoxin] event %s GPIO0_%u cnt=%u lvl=%u t=%u.%06u\n",
-		    yaoxin_type_str(event->yaoxin_type), gpio_pin,
-		    event->count, event->status,
-		    event->timestamp, event->timestamp_us);
+	if (yaoxin_allow_debug) {
+		fLib_printf("[yaoxin] event %s GPIO0_%u cnt=%u lvl=%u t=%u.%06u\n",
+			    yaoxin_type_str(event->yaoxin_type), gpio_pin,
+			    event->count, event->status,
+			    event->timestamp, event->timestamp_us);
+	}
 
 	ipc_notify_a7(IPC_YAOXIN_CHANNEL);
 }
@@ -155,6 +165,7 @@ void yaoxin_handle_cfg_cmd(void)
 	}
 
 	hdr = (ipc_cmd_hdr_t *)ipc_rx->data;
+
 	fLib_printf("[yaoxin] cfg cmd=0x%02x seq=%u len=%u\n",
 		    hdr->cmd, hdr->seq, ipc_rx->len);
 
@@ -172,6 +183,7 @@ void yaoxin_handle_cfg_cmd(void)
 		g_time_base_us = time_data->unix_usec;
 		g_time_base_ms = yaoxin_now_ms();
 		g_time_synced = 1;
+
 		fLib_printf("[yaoxin] time sync %u.%06u tick=%u\n",
 			    g_time_base_sec, g_time_base_us, g_time_base_ms);
 		break;
@@ -187,7 +199,12 @@ void yaoxin_handle_cfg_cmd(void)
 		param = (ipc_set_param_t *)(hdr + 1);
 		if (param->debounce_ms > 0)
 			g_debounce_ms = param->debounce_ms;
+
 		fLib_printf("[yaoxin] debounce=%u ms\n", g_debounce_ms);
+		break;
+	}
+	case IPC_CMD_ALLOW_DBG: {
+		yaoxin_allow_debug = 1;
 		break;
 	}
 	default:
@@ -206,7 +223,7 @@ void GPIO010_IRQHandler(void)
 	uint32 pin;
 
 	fLib_ClearGpioInt(GPIO_FTGPIO010_PA_BASE, status);
-	fLib_printf("[yaoxin] gpio irq status=0x%08x tick=%u\n", status, now_ms);
+	// fLib_printf("[yaoxin] gpio irq status=0x%08x tick=%u\n", status, now_ms);
 
 	for (pin = 0; pin < 32; pin++) {
 		if (!(status & (1u << pin)))
@@ -215,7 +232,9 @@ void GPIO010_IRQHandler(void)
 			continue;
 
 		if ((now_ms - g_last_trigger_ms[pin]) < g_debounce_ms) {
-			fLib_printf("[yaoxin] pin %u debounce skip\n", pin);
+			if (yaoxin_allow_debug)
+				fLib_printf("[yaoxin] pin %u debounce skip\n", pin);
+
 			continue;
 		}
 		g_last_trigger_ms[pin] = now_ms;
@@ -225,7 +244,7 @@ void GPIO010_IRQHandler(void)
 	}
 }
 
-/* 周期性打印 GPIO 电平与计数，便于确认小核侧状态 */
+/* 调试使用：周期性打印 GPIO 电平与计数，便于确认小核侧状态 */
 void yaoxin_debug_poll(void)
 {
 	uint32 now_ms = yaoxin_now_ms();
@@ -240,7 +259,6 @@ void yaoxin_debug_poll(void)
 
 	fLib_printf("[yaoxin] poll tick=%u synced=%u debounce=%ums\n",
 		    now_ms, g_time_synced, g_debounce_ms);
-	fLib_printf("[yaoxin] (poll every 2000 ticks ~= 2s if 1ms/tick)\n");
 	fLib_printf("[yaoxin] GPIO0_11=%u cnt=%u  GPIO0_12=%u cnt=%u  GPIO0_13=%u cnt=%u\n",
 		    (gpio_data >> YAOXIN_PIN_DOOR) & 1U,
 		    g_trigger_count[YAOXIN_PIN_DOOR],
@@ -263,8 +281,6 @@ void yaoxin_init(void)
 
 	/* PWMTMR_1MSEC_PERIOD == APB_CLK/1000，依赖 system_leo.h 中 APB_CLK 正确 */
 	fLib_Timer_Init(DRVPWMTMR4, PWMTMR_1MSEC_PERIOD);
-	fLib_printf("[yaoxin] timer reload=%u (APB_CLK=%u), expect 1ms/tick\n",
-		    (unsigned)PWMTMR_1MSEC_PERIOD, (unsigned)APB_CLK);
 
 	yaoxin_gpio_configure(YAOXIN_PIN_SIGNAL1);
 	yaoxin_gpio_configure(YAOXIN_PIN_SIGNAL2);

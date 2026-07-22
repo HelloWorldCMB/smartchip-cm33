@@ -20,6 +20,7 @@ typedef struct {
 /* 通道0 命令码 */
 #define IPC_CMD_SET_TIME	0x01
 #define IPC_CMD_SET_PARAM	0x02
+#define IPC_CMD_ALLOW_DBG	0x03
 #define IPC_CMD_ACK		0x80
 
 typedef struct {
