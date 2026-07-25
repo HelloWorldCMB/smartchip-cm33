@@ -2,13 +2,13 @@
  * cm33_ipc_app.c - 大核侧 IPC 通信 Demo
  *
  * 与小核 ipc.h / yaoxin.c 协议保持一致：
- *   通道0 (IPC_CFG_CHANNEL)   : 大核 -> 小核，下发时间同步、消抖参数，小核回 ACK
- *   通道1 (IPC_YAOXIN_CHANNEL): 小核 -> 大核，上报遥信事件（时间 + 状态 + 次数）
+ *   通道0 (IPC_CFG_CHANNEL)   : 大核 -> 小核，下发墙钟+启动时长、消抖参数，小核回 ACK
+ *   通道1 (IPC_YAOXIN_CHANNEL): 小核 -> 大核，上报遥信事件
  *
- * 遥信引脚映射（大核 GPIO 命名）：
- *   遥信1  GPIO0_13
- *   遥信2  GPIO0_12
- *   门节点 GPIO0_11
+ * 遥信通道号：
+ *   门节点 0x20 (GPIO0_11)
+ *   遥信1  0x21 (GPIO0_13)
+ *   遥信2  0x22 (GPIO0_12)
  */
 
 #include <sys/types.h>
@@ -26,8 +26,8 @@
 
 #define DEV_NAME    "/dev/cm33_ipc"
 
-/* 驱动侧单通道共享内存大小（与小核 IPC_PER_CHANNEL_SRAM_SIZE 逻辑对应） */
-#define IPC_PER_CHANNEL_SRAM_SIZE	(4096 + 4)
+/* 驱动侧单通道共享内存大小；通道1 最多 64×64B，需大于 header + 载荷 */
+#define IPC_PER_CHANNEL_SRAM_SIZE	(64 + 64 * 64)
 #define IPC_CHANNEL_MAX			2
 
 /* 通道号，须与小核 ipc.h 一致 */
@@ -47,9 +47,8 @@ typedef struct {
 
 /* ---------- 通道0 命令协议（与小核 ipc.h 同步） ---------- */
 
-#define IPC_CMD_SET_TIME	0x01	/* 下发时间基准，供小核打时标 */
+#define IPC_CMD_SET_TIME	0x01	/* 下发墙钟 + 启动时长，供小核打时标 */
 #define IPC_CMD_SET_PARAM	0x02	/* 下发消抖等参数 */
-#define IPC_CMD_ALLOW_DBG	0x03	/* 打开调试打印 */
 #define IPC_CMD_ACK		0x80	/* 小核确认帧 */
 
 typedef struct {
@@ -58,8 +57,10 @@ typedef struct {
 } ipc_cmd_hdr_t;
 
 typedef struct {
-	uint32_t unix_sec;
-	uint32_t unix_usec;
+	uint64_t wall_time_sec;
+	uint32_t wall_time_ns;
+	uint32_t reserved;
+	uint64_t assert_time;		/* 大核启动至今 ns */
 } ipc_set_time_t;
 
 typedef struct {
@@ -75,22 +76,27 @@ typedef struct {
 
 /* ---------- 通道1 遥信事件（与小核 ipc.h 同步） ---------- */
 
-#define YAOXIN_TYPE_SIGNAL1	0
-#define YAOXIN_TYPE_SIGNAL2	1
-#define YAOXIN_TYPE_DOOR	2
+#define YAOXIN_CH_DOOR		0x20
+#define YAOXIN_CH_SIGNAL1	0x21
+#define YAOXIN_CH_SIGNAL2	0x22
 
-#define YAOXIN_DEBOUNCE_MS_DEFAULT	30 // 消抖时间，单位毫秒
+#define YAOXIN_DEBOUNCE_MS_DEFAULT	30
+
+#define YAOXIN_VALUE_RESTORE	0
+#define YAOXIN_VALUE_ASSERT	1
 
 typedef struct {
-	uint32_t gpio_bank;		/* 固定为 0，对应 GPIO0_xx */
-	uint32_t gpio_pin;		/* 11/12/13 */
-	uint32_t timestamp;		/* Unix 秒 */
-	uint32_t timestamp_us;		/* 微秒 */
-	uint32_t count;			/* 该路累计触发次数 */
-	uint8_t  status;		/* 当前电平：0/1 */
-	uint8_t  yaoxin_type;		/* 0遥信1 / 1遥信2 / 2门节点 */
-	uint8_t  reserved[2];
+	uint32_t channel;		/* 门节点0x20 / 1路0x21 / 2路0x22 */
+	uint32_t count;			/* 变位总数 */
+	uint32_t value;			/* 1-变位 0-恢复 */
+	uint32_t wall_time_ns;
+	uint64_t wall_time_sec;
+	uint64_t assert_time;		/* 大核启动至今 ns */
 } yaoxin_event_t;
+
+/* 驱动通道1：每条事件固定占 64 字节槽，缓冲最多 64 条；满后再来会整缓冲清空重填 */
+#define YAOXIN_EVENT_SLOT_SIZE		64
+#define YAOXIN_EVENT_CACHE_DEPTH	64
 
 static uint32_t g_cmd_seq;
 
@@ -107,14 +113,14 @@ static void print_hex(const unsigned char *data, size_t len)
 		printf("\n");
 }
 
-static const char *yaoxin_type_name(uint8_t type)
+static const char *yaoxin_channel_name(uint32_t channel)
 {
-	switch (type) {
-	case YAOXIN_TYPE_SIGNAL1:
+	switch (channel) {
+	case YAOXIN_CH_SIGNAL1:
 		return "遥信1";
-	case YAOXIN_TYPE_SIGNAL2:
+	case YAOXIN_CH_SIGNAL2:
 		return "遥信2";
-	case YAOXIN_TYPE_DOOR:
+	case YAOXIN_CH_DOOR:
 		return "门节点";
 	default:
 		return "未知";
@@ -123,11 +129,16 @@ static const char *yaoxin_type_name(uint8_t type)
 
 static void yaoxin_print_event(const yaoxin_event_t *event)
 {
-	printf("  GPIO%d_%u  %s\n",
-	       event->gpio_bank, event->gpio_pin,
-	       yaoxin_type_name(event->yaoxin_type));
-	printf("  时间: %u.%06u\n", event->timestamp, event->timestamp_us);
-	printf("  次数: %u  电平: %u\n", event->count, event->status);
+	printf("  通道: 0x%02x (%s)\n", event->channel,
+	       yaoxin_channel_name(event->channel));
+	printf("  次数: %u  值: %u (%s)\n",
+	       event->count, event->value,
+	       event->value ? "变位" : "恢复");
+	printf("  墙钟: %llu.%09u\n",
+	       (unsigned long long)event->wall_time_sec,
+	       event->wall_time_ns);
+	printf("  启动时长: %llu ns\n",
+	       (unsigned long long)event->assert_time);
 }
 
 /*
@@ -153,8 +164,7 @@ static int ipc_cfg_send_and_wait_ack(int fd,
 
 	/* 非阻塞 open 时，ACK 可能稍后到达，做有限次重试 */
 	for (retry = 0; retry < 50; retry++) {
-		memset(recv_buf->data, 0,
-		       IPC_PER_CHANNEL_SRAM_SIZE - sizeof(ipc_data_area_t));
+		memset(recv_buf, 0, IPC_PER_CHANNEL_SRAM_SIZE);
 		recv_buf->id = IPC_CFG_CHANNEL;
 
 		ret = ioctl(fd, CM33_IPC_IOCTRL_REV_DATA, recv_buf);
@@ -191,27 +201,41 @@ static int ipc_cfg_send_and_wait_ack(int fd,
 	return 0;
 }
 
-/* 向小核同步当前系统时间，作为遥信时标基准 */
+/* 向小核同步墙钟时间 + 大核启动时长，作为遥信时标基准 */
 static int yaoxin_sync_time(int fd,
 			    ipc_data_area_t *send_buf,
 			    ipc_data_area_t *recv_buf)
 {
-	struct timeval tv;
+	struct timespec wall_ts;
+	struct timespec boot_ts;
 	ipc_cmd_hdr_t *hdr;
 	ipc_set_time_t *time_data;
 
-	gettimeofday(&tv, NULL);
+	if (clock_gettime(CLOCK_REALTIME, &wall_ts) < 0) {
+		perror("clock_gettime CLOCK_REALTIME");
+		return -1;
+	}
+	if (clock_gettime(CLOCK_BOOTTIME, &boot_ts) < 0) {
+		perror("clock_gettime CLOCK_BOOTTIME");
+		return -1;
+	}
 
 	hdr = (ipc_cmd_hdr_t *)send_buf->data;
 	time_data = (ipc_set_time_t *)(hdr + 1);
 
 	hdr->cmd = IPC_CMD_SET_TIME;
 	hdr->seq = ++g_cmd_seq;
-	time_data->unix_sec = (uint32_t)tv.tv_sec;
-	time_data->unix_usec = (uint32_t)tv.tv_usec;
+	time_data->wall_time_sec = (uint64_t)wall_ts.tv_sec;
+	time_data->wall_time_ns = (uint32_t)wall_ts.tv_nsec;
+	time_data->reserved = 0;
+	time_data->assert_time = (uint64_t)boot_ts.tv_sec * 1000000000ULL +
+				 (uint64_t)boot_ts.tv_nsec;
 
-	printf("同步时间: %u.%06u, seq=%u\n",
-	       time_data->unix_sec, time_data->unix_usec, hdr->seq);
+	printf("同步时间: wall=%llu.%09u assert=%llu ns, seq=%u\n",
+	       (unsigned long long)time_data->wall_time_sec,
+	       time_data->wall_time_ns,
+	       (unsigned long long)time_data->assert_time,
+	       hdr->seq);
 
 	return ipc_cfg_send_and_wait_ack(fd, send_buf, recv_buf,
 					 sizeof(ipc_set_time_t));
@@ -240,18 +264,6 @@ static int yaoxin_set_debounce(int fd,
 					 sizeof(ipc_set_param_t));
 }
 
-static int yaoxin_allow_debug(int fd,
-			       ipc_data_area_t *send_buf,
-			       ipc_data_area_t *recv_buf)
-{
-	ipc_cmd_hdr_t *hdr;
-	hdr = (ipc_cmd_hdr_t *)send_buf->data;
-	hdr->cmd = IPC_CMD_ALLOW_DBG;
-	hdr->seq = ++g_cmd_seq;
-
-	return ipc_cfg_send_and_wait_ack(fd, send_buf, recv_buf, 0);
-}
-
 /* 遥信初始化：同步时间 + 设置默认消抖 */
 static int yaoxin_init_cfg(int fd,
 			   ipc_data_area_t *send_buf,
@@ -266,39 +278,55 @@ static int yaoxin_init_cfg(int fd,
 
 /*
  * 持续读取通道1 遥信事件。
- * 通道1 为小核单向发送，每条最大 64 字节，驱动侧有 64 条缓存。
+ * 驱动未满时一次 ioctl 读出当前全部事件；每条在缓冲中占 YAOXIN_EVENT_SLOT_SIZE。
  */
 static void yaoxin_poll_events(int fd, ipc_data_area_t *recv_buf)
 {
-	yaoxin_event_t *event;
+	size_t offset;
+	size_t n;
 	int ret;
 
 	printf("监听遥信事件（通道1），Ctrl+C 退出...\n");
 
 	while (1) {
-		memset(recv_buf->data, 0,
-		       IPC_PER_CHANNEL_SRAM_SIZE - sizeof(ipc_data_area_t));
+		memset(recv_buf, 0, IPC_PER_CHANNEL_SRAM_SIZE);
 		recv_buf->id = IPC_YAOXIN_CHANNEL;
 
 		ret = ioctl(fd, CM33_IPC_IOCTRL_REV_DATA, recv_buf);
 		if (ret < 0) {
 			if (errno == EAGAIN) {
-				usleep(100000);	/* 100ms 轮询间隔 */
+				usleep(10 * 1000);	/* 10ms，降低满缓冲清空风险 */
 				continue;
 			}
 			perror("CM33_IPC_IOCTRL_REV_DATA");
 			break;
 		}
 
-		if (recv_buf->len < sizeof(yaoxin_event_t)) {
-			printf("事件长度异常: %zu, hex:\n", recv_buf->len);
+		if (recv_buf->len == 0) {
+			usleep(10 * 1000);
+			continue;
+		}
+
+		if (recv_buf->len % YAOXIN_EVENT_SLOT_SIZE != 0) {
+			printf("事件总长异常(非 %d 对齐): %zu, hex:\n",
+			       YAOXIN_EVENT_SLOT_SIZE, recv_buf->len);
 			print_hex(recv_buf->data, recv_buf->len);
 			continue;
 		}
 
-		event = (yaoxin_event_t *)recv_buf->data;
-		printf("\n--- 遥信事件 ---\n");
-		yaoxin_print_event(event);
+		n = recv_buf->len / YAOXIN_EVENT_SLOT_SIZE;
+		if (n > YAOXIN_EVENT_CACHE_DEPTH)
+			n = YAOXIN_EVENT_CACHE_DEPTH;
+
+		printf("\n--- 本批 %zu 条遥信事件 ---\n", n);
+		for (offset = 0; offset < n * YAOXIN_EVENT_SLOT_SIZE;
+		     offset += YAOXIN_EVENT_SLOT_SIZE) {
+			yaoxin_event_t *event =
+				(yaoxin_event_t *)(recv_buf->data + offset);
+
+			printf("\n[%zu]\n", offset / YAOXIN_EVENT_SLOT_SIZE);
+			yaoxin_print_event(event);
+		}
 	}
 }
 
@@ -411,7 +439,6 @@ int main(int argc, char **argv)
 		printf("2: 监听遥信事件（通道1）\n");
 		printf("3: 发送原始数据（调试）\n");
 		printf("4: 接收原始数据（调试）\n");
-		printf("5: 打开小核调试打印（调试）\n");
 		printf("================================\n");
 		printf("请选择: ");
 
@@ -436,9 +463,6 @@ int main(int argc, char **argv)
 			break;
 		case 4:
 			ipc_raw_recv(fd, recv_ipc_data);
-			break;
-		case 5:
-			yaoxin_allow_debug(fd, send_ipc_data, recv_ipc_data);
 			break;
 		default:
 			printf("无效选项\n");

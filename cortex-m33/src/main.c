@@ -23,6 +23,7 @@ int main(void)
 	yaoxin_init();
 
 	while (1) {
+		yaoxin_queue_poll();	/* 本地队列出队 -> 共享内存 notify */
 		// yaoxin_debug_poll();
 		__WFI();
 	}

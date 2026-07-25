@@ -20,7 +20,6 @@ typedef struct {
 /* 通道0 命令码 */
 #define IPC_CMD_SET_TIME	0x01
 #define IPC_CMD_SET_PARAM	0x02
-#define IPC_CMD_ALLOW_DBG	0x03
 #define IPC_CMD_ACK		0x80
 
 typedef struct {
@@ -28,9 +27,17 @@ typedef struct {
 	uint32 seq;
 } ipc_cmd_hdr_t;
 
+/*
+ * 时间同步载荷（通道0）：
+ *   wall_time_*  : 墙钟时间
+ *   assert_time  : 大核启动至今时长（ns，CLOCK_BOOTTIME）
+ * 小核以本地 T4_Tick 为锚点换算后续事件时标。
+ */
 typedef struct {
-	uint32 unix_sec;
-	uint32 unix_usec;
+	UINT64 wall_time_sec;
+	uint32 wall_time_ns;
+	uint32 reserved;
+	UINT64 assert_time;
 } ipc_set_time_t;
 
 typedef struct {
@@ -44,10 +51,10 @@ typedef struct {
 	uint32 result;
 } ipc_ack_t;
 
-/* 通道1 遥信事件，总长 <= 64 字节 */
-#define YAOXIN_TYPE_SIGNAL1	0
-#define YAOXIN_TYPE_SIGNAL2	1
-#define YAOXIN_TYPE_DOOR	2
+/* 通道1 遥信事件，总长 32 字节（<= 64） */
+#define YAOXIN_CH_DOOR		0x20
+#define YAOXIN_CH_SIGNAL1	0x21
+#define YAOXIN_CH_SIGNAL2	0x22
 
 #define YAOXIN_GPIO_BANK	0
 #define YAOXIN_PIN_SIGNAL1	13
@@ -59,20 +66,22 @@ typedef struct {
 
 #define YAOXIN_DEBOUNCE_MS_DEFAULT	30
 
+#define YAOXIN_VALUE_RESTORE	0	/* 恢复 */
+#define YAOXIN_VALUE_ASSERT	1	/* 变位 */
+
 typedef struct {
-	uint32 gpio_bank;
-	uint32 gpio_pin;
-	uint32 timestamp;
-	uint32 timestamp_us;
-	uint32 count;
-	uint8  status;
-	uint8  yaoxin_type;
-	uint8  reserved[2];
+	uint32 channel;		/* 门节点0x20 / 1路0x21 / 2路0x22 */
+	uint32 count;		/* 变位总数 */
+	uint32 value;		/* 1-变位 0-恢复 */
+	uint32 wall_time_ns;	/* 变位时间 ns（秒内余数） */
+	UINT64 wall_time_sec;	/* 变位时间 sec */
+	UINT64 assert_time;	/* 大核启动至今时长 ns */
 } yaoxin_event_t;
 
 void yaoxin_init(void);
 void yaoxin_handle_cfg_cmd(void);
 void yaoxin_send_event(uint32 gpio_pin);
+void yaoxin_queue_poll(void);	/* 主循环调用：出队并间隔 notify 大核 */
 void yaoxin_debug_poll(void);
 
 #endif
