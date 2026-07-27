@@ -44,6 +44,8 @@ CFLAGS     := $(CPU_FLAGS) $(DEFS) $(INCLUDES) \
 	-Wall -Wno-unused-parameter -Wno-unused-variable \
 	-std=gnu99
 
+CFLAGS += $(EXTRA_CFLAGS)
+
 ASFLAGS    := $(CPU_FLAGS) $(DEFS) -g3
 
 LDSCRIPT   := $(GCC_DIR)/cm33.ld

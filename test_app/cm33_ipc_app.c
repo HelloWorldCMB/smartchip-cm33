@@ -231,10 +231,12 @@ static int yaoxin_sync_time(int fd,
 	time_data->assert_time = (uint64_t)boot_ts.tv_sec * 1000000000ULL +
 				 (uint64_t)boot_ts.tv_nsec;
 
-	printf("同步时间: wall=%llu.%09u assert=%llu ns, seq=%u\n",
-	       (unsigned long long)time_data->wall_time_sec,
+	printf("同步时间: wall=%08x%08x.%09u assert=%08x%08x ns, seq=%u\n",
+	       (uint32_t)(time_data->wall_time_sec >> 32),
+	       (uint32_t)(time_data->wall_time_sec),
 	       time_data->wall_time_ns,
-	       (unsigned long long)time_data->assert_time,
+	       (uint32_t)(time_data->assert_time >> 32),
+	       (uint32_t)(time_data->assert_time),
 	       hdr->seq);
 
 	return ipc_cfg_send_and_wait_ack(fd, send_buf, recv_buf,
