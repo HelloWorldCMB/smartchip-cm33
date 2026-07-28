@@ -20,6 +20,7 @@ typedef struct {
 /* 通道0 命令码 */
 #define IPC_CMD_SET_TIME	0x01
 #define IPC_CMD_SET_PARAM	0x02
+#define IPC_CMD_GET_VERSION	0x03
 #define IPC_CMD_ACK		0x80
 
 typedef struct {
@@ -50,6 +51,17 @@ typedef struct {
 	uint32 seq;
 	uint32 result;
 } ipc_ack_t;
+
+typedef struct {
+	uint32 major;
+	uint32 minor;
+	uint32 patch;
+} ipc_version_t;
+
+typedef struct {
+	ipc_ack_t ack;
+	ipc_version_t version;
+} ipc_reply_t;
 
 /* 通道1 遥信事件，总长 32 字节（<= 64） */
 #define YAOXIN_CH_DOOR		0x20

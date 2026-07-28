@@ -49,6 +49,7 @@ typedef struct {
 
 #define IPC_CMD_SET_TIME	0x01	/* 下发墙钟 + 启动时长，供小核打时标 */
 #define IPC_CMD_SET_PARAM	0x02	/* 下发消抖等参数 */
+#define IPC_CMD_GET_VERSION	0x03	/* 获取小核版本 */
 #define IPC_CMD_ACK		0x80	/* 小核确认帧 */
 
 typedef struct {
@@ -73,6 +74,17 @@ typedef struct {
 	uint32_t seq;
 	uint32_t result;		/* 0=成功，非0=失败 */
 } ipc_ack_t;
+
+typedef struct {
+	uint32_t major;
+	uint32_t minor;
+	uint32_t patch;
+} ipc_version_t;
+
+typedef struct {
+	ipc_ack_t ack;
+	ipc_version_t version;
+} ipc_reply_t;
 
 /* ---------- 通道1 遥信事件（与小核 ipc.h 同步） ---------- */
 
@@ -151,6 +163,7 @@ static int ipc_cfg_send_and_wait_ack(int fd,
 				     size_t payload_len)
 {
 	ipc_ack_t *ack;
+	ipc_version_t *version;
 	int ret, retry;
 
 	send_buf->id = IPC_CFG_CHANNEL;
@@ -178,7 +191,7 @@ static int ipc_cfg_send_and_wait_ack(int fd,
 	}
 
 	if (ret < 0) {
-		printf("等待 ACK 超时\n");
+		printf("等待回复超时\n");
 		return -1;
 	}
 
@@ -195,6 +208,16 @@ static int ipc_cfg_send_and_wait_ack(int fd,
 	if (ack->result != 0) {
 		printf("小核处理失败, seq=%u, result=%u\n", ack->seq, ack->result);
 		return -1;
+	}
+
+	if (recv_buf->len == sizeof(ipc_reply_t)) {
+		ipc_reply_t *reply = (ipc_reply_t *)recv_buf->data;
+
+		printf("小核版本: V%u.%u.%u\n",
+		       reply->version.major,
+		       reply->version.minor,
+		       reply->version.patch);
+		return 0;
 	}
 
 	printf("ACK OK, seq=%u\n", ack->seq);
@@ -276,6 +299,19 @@ static int yaoxin_init_cfg(int fd,
 
 	return yaoxin_set_debounce(fd, send_buf, recv_buf,
 				   YAOXIN_DEBOUNCE_MS_DEFAULT);
+}
+
+static int yaoxin_get_version(int fd,
+			       ipc_data_area_t *send_buf,
+			       ipc_data_area_t *recv_buf)
+{
+	ipc_cmd_hdr_t *hdr;
+
+	hdr = (ipc_cmd_hdr_t *)send_buf->data;
+	hdr->cmd = IPC_CMD_GET_VERSION;
+	hdr->seq = ++g_cmd_seq;
+
+	return ipc_cfg_send_and_wait_ack(fd, send_buf, recv_buf, 0);
 }
 
 /*
@@ -441,6 +477,7 @@ int main(int argc, char **argv)
 		printf("2: 监听遥信事件（通道1）\n");
 		printf("3: 发送原始数据（调试）\n");
 		printf("4: 接收原始数据（调试）\n");
+		printf("5: 获取小核版本\n");
 		printf("================================\n");
 		printf("请选择: ");
 
@@ -465,6 +502,9 @@ int main(int argc, char **argv)
 			break;
 		case 4:
 			ipc_raw_recv(fd, recv_ipc_data);
+			break;
+		case 5:
+			yaoxin_get_version(fd, send_ipc_data, recv_ipc_data);
 			break;
 		default:
 			printf("无效选项\n");

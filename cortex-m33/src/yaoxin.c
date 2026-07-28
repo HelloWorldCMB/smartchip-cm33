@@ -8,6 +8,10 @@
 #include "DrvUART010.h"
 #include "leo_cm33.h"
 
+#define YAOXIN_VERSION_MAJOR	1
+#define YAOXIN_VERSION_MINOR	0
+#define YAOXIN_VERSION_PATCH	0
+
 #define YAOXIN_GPIO_POLARITY		0 /* 0:Active Low，1:Active High */
 
 /*
@@ -126,7 +130,7 @@ static uint32 yaoxin_pin_is_active(uint32 gpio_pin)
 
 	if (!YAOXIN_GPIO_POLARITY)
 		return high ? 0U : 1U;	/* Active Low */
-	
+
 	return high ? 1U : 0U;		/* Active High */
 }
 
@@ -375,6 +379,29 @@ static void yaoxin_send_ack(uint32 seq, uint32 result)
 	ipc_notify_a7(IPC_CFG_CHANNEL);
 }
 
+static void yaoxin_send_version(uint32 seq, uint32 result)
+{
+	ipc_data_area_t *ipc_tx = ipc_channel_addr(IPC_CFG_CHANNEL);
+	ipc_reply_t *reply = (ipc_reply_t *)ipc_tx->data;
+
+	ipc_tx->id = IPC_CFG_CHANNEL;
+	ipc_tx->len = sizeof(ipc_reply_t);
+
+	reply->ack.cmd = IPC_CMD_ACK;
+	reply->ack.seq = seq;
+	reply->ack.result = result;
+	reply->version.major = YAOXIN_VERSION_MAJOR;
+	reply->version.minor = YAOXIN_VERSION_MINOR;
+	reply->version.patch = YAOXIN_VERSION_PATCH;
+
+	fLib_printf("[yaoxin] version=V%u.%u.%u\n",
+			    YAOXIN_VERSION_MAJOR,
+			    YAOXIN_VERSION_MINOR,
+			    YAOXIN_VERSION_PATCH);
+
+	ipc_notify_a7(IPC_CFG_CHANNEL);
+}
+
 /* 共享内存上避免直接 LDRD/64 位访问，部分总线会挂死 */
 static UINT64 yaoxin_load_u64_le(const void *src)
 {
@@ -471,6 +498,10 @@ void yaoxin_handle_cfg_cmd(void)
 		fLib_printf("[yaoxin] debounce=%u ms\n", g_debounce_ms);
 		break;
 	}
+	case IPC_CMD_GET_VERSION: {
+		yaoxin_send_version(hdr->seq, 0);
+		goto done;
+	}
 	default:
 		fLib_printf("[yaoxin] unknown cfg cmd 0x%02x\n", hdr->cmd);
 		result = 1;
@@ -478,6 +509,8 @@ void yaoxin_handle_cfg_cmd(void)
 	}
 
 	yaoxin_send_ack(hdr->seq, result);
+done:
+	return;
 }
 
 void GPIO010_IRQHandler(void)
