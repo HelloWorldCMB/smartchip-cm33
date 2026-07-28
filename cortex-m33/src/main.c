@@ -24,7 +24,7 @@ int main(void)
 
 	while (1) {
 		yaoxin_queue_poll();	/* 本地队列出队 -> 共享内存 notify */
-		// yaoxin_debug_poll();
+		keep_alive_debug_poll(); /* 每隔2秒打印一次 */
 		__WFI();
 	}
 }

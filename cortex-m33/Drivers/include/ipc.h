@@ -82,6 +82,6 @@ void yaoxin_init(void);
 void yaoxin_handle_cfg_cmd(void);
 void yaoxin_send_event(uint32 gpio_pin);
 void yaoxin_queue_poll(void);	/* 主循环调用：出队并间隔 notify 大核 */
-void yaoxin_debug_poll(void);
+void keep_alive_debug_poll(void);
 
 #endif

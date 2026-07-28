@@ -126,6 +126,7 @@ static uint32 yaoxin_pin_is_active(uint32 gpio_pin)
 
 	if (!YAOXIN_GPIO_POLARITY)
 		return high ? 0U : 1U;	/* Active Low */
+	
 	return high ? 1U : 0U;		/* Active High */
 }
 
@@ -370,7 +371,7 @@ static void yaoxin_send_ack(uint32 seq, uint32 result)
 	ack->seq = seq;
 	ack->result = result;
 
-	YAOXIN_PRINTF("[yaoxin] cfg ack seq=%u result=%u\n", seq, result);
+	fLib_printf("[yaoxin] cfg ack seq=%u result=%u\n", seq, result);
 	ipc_notify_a7(IPC_CFG_CHANNEL);
 }
 
@@ -411,7 +412,7 @@ void yaoxin_handle_cfg_cmd(void)
 	uint32 result = 0;
 
 	if (ipc_rx->len < sizeof(ipc_cmd_hdr_t)) {
-		YAOXIN_PRINTF("[yaoxin] cfg cmd len error: %u\n", ipc_rx->len);
+		fLib_printf("[yaoxin] cfg cmd len error: %u\n", ipc_rx->len);
 		return;
 	}
 
@@ -421,7 +422,7 @@ void yaoxin_handle_cfg_cmd(void)
 	if (hdr->cmd == IPC_CMD_ACK)
 		return;
 
-	YAOXIN_PRINTF("[yaoxin] cfg cmd=0x%02x seq=%u len=%u\n",
+	fLib_printf("[yaoxin] cfg cmd=0x%02x seq=%u len=%u\n",
 		      hdr->cmd, hdr->seq, ipc_rx->len);
 
 	switch (hdr->cmd) {
@@ -429,7 +430,7 @@ void yaoxin_handle_cfg_cmd(void)
 		ipc_set_time_t time_data;
 
 		if (ipc_rx->len < sizeof(ipc_cmd_hdr_t) + sizeof(ipc_set_time_t)) {
-			YAOXIN_PRINTF("[yaoxin] SET_TIME len=%u need=%u\n",
+			fLib_printf("[yaoxin] SET_TIME len=%u need=%u\n",
 				      ipc_rx->len,
 				      (unsigned)(sizeof(ipc_cmd_hdr_t) +
 						  sizeof(ipc_set_time_t)));
@@ -444,7 +445,7 @@ void yaoxin_handle_cfg_cmd(void)
 		g_time_base_ms = yaoxin_now_ms();
 		g_time_synced = 1;
 
-		YAOXIN_PRINTF("[yaoxin] time sync wall=%08x%08x.%09u assert=%08x%08x tick=%u\n",
+		fLib_printf("[yaoxin] time sync wall=%08x%08x.%09u assert=%08x%08x tick=%u\n",
 			      (uint32)(g_wall_base_sec >> 32),
 			      (uint32)(g_wall_base_sec),
 			      (unsigned)g_wall_base_ns,
@@ -467,11 +468,11 @@ void yaoxin_handle_cfg_cmd(void)
 		param.reserved = yaoxin_load_u32(p + 4);
 		g_debounce_ms = param.debounce_ms;
 
-		YAOXIN_PRINTF("[yaoxin] debounce=%u ms\n", g_debounce_ms);
+		fLib_printf("[yaoxin] debounce=%u ms\n", g_debounce_ms);
 		break;
 	}
 	default:
-		YAOXIN_PRINTF("[yaoxin] unknown cfg cmd 0x%02x\n", hdr->cmd);
+		fLib_printf("[yaoxin] unknown cfg cmd 0x%02x\n", hdr->cmd);
 		result = 1;
 		break;
 	}
@@ -497,35 +498,15 @@ void GPIO010_IRQHandler(void)
 	}
 }
 
-void yaoxin_debug_poll(void)
+void keep_alive_debug_poll(void)
 {
-#if YAOXIN_DEBUG_PRINT
 	uint32 now_ms = yaoxin_now_ms();
-	uint32 gpio_data;
 
 	if ((now_ms - g_debug_last_ms) < 2000)
 		return;
 	g_debug_last_ms = now_ms;
 
-	gpio_data = fLib_Gpio_ReadData(GPIO_FTGPIO010_PA_BASE);
-
-	YAOXIN_PRINTF("[yaoxin] poll tick=%u synced=%u debounce=%ums qdrop=%u\n",
-		      now_ms, g_time_synced, g_debounce_ms, g_q_drop);
-	YAOXIN_PRINTF("[yaoxin] GPIO0_11=%u st=%u cnt=%u  "
-		      "GPIO0_12=%u st=%u cnt=%u  GPIO0_13=%u st=%u cnt=%u\n",
-		      (gpio_data >> YAOXIN_PIN_DOOR) & 1U,
-		      g_pin_state[YAOXIN_PIN_DOOR],
-		      g_trigger_count[YAOXIN_PIN_DOOR],
-		      (gpio_data >> YAOXIN_PIN_SIGNAL2) & 1U,
-		      g_pin_state[YAOXIN_PIN_SIGNAL2],
-		      g_trigger_count[YAOXIN_PIN_SIGNAL2],
-		      (gpio_data >> YAOXIN_PIN_SIGNAL1) & 1U,
-		      g_pin_state[YAOXIN_PIN_SIGNAL1],
-		      g_trigger_count[YAOXIN_PIN_SIGNAL1]);
-#else
-	(void)g_debug_last_ms;
-	(void)g_q_drop;
-#endif
+	fLib_printf("[%d]:Still alive\n", now_ms / 1000);
 }
 
 static void yaoxin_pin_state_init(uint32 gpio_pin)
@@ -542,9 +523,7 @@ void yaoxin_init(void)
 {
 	uint32 gpio_data;
 
-#if YAOXIN_DEBUG_PRINT
 	fLib_SerialInit(DEBUG_CONSOLE, DEFAULT_CONSOLE_BAUD, PARITY_NONE, 0, 8);
-#endif
 
 	memset((void *)iRAM_DATA_BASE, 0x00, IPC_SHARE_SRAM_SIZE);
 	memset(g_trigger_count, 0, sizeof(g_trigger_count));
@@ -570,10 +549,10 @@ void yaoxin_init(void)
 	NVIC_EnableIRQ(GPIO_FTGPIO010_IRQ);
 
 	gpio_data = fLib_Gpio_ReadData(GPIO_FTGPIO010_PA_BASE);
-	YAOXIN_PRINTF("[yaoxin] gpio irq=%u debounce=%ums qdepth=%u gap=%ums\n",
+	fLib_printf("[yaoxin] gpio irq=%u debounce=%ums qdepth=%u gap=%ums\n",
 		      GPIO_FTGPIO010_IRQ, g_debounce_ms,
 		      YAOXIN_LOCAL_QUEUE_DEPTH, YAOXIN_IPC_GAP_MS);
-	YAOXIN_PRINTF("[yaoxin] init done, GPIO0_11=%u GPIO0_12=%u GPIO0_13=%u\n",
+	fLib_printf("[yaoxin] init done, GPIO0_11=%u GPIO0_12=%u GPIO0_13=%u\n",
 		      (gpio_data >> YAOXIN_PIN_DOOR) & 1U,
 		      (gpio_data >> YAOXIN_PIN_SIGNAL2) & 1U,
 		      (gpio_data >> YAOXIN_PIN_SIGNAL1) & 1U);
