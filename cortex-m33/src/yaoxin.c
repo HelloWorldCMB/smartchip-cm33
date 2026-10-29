@@ -1,6 +1,7 @@
 #include <string.h>
 
 #include "ipc.h"
+#include "console_cli.h"
 #include "spec.h"
 #include "io.h"
 #include "DrvGPIO010.h"
@@ -531,15 +532,96 @@ void GPIO010_IRQHandler(void)
 	}
 }
 
+static uint32 g_keepalive_en = 1;
+
 void keep_alive_debug_poll(void)
 {
 	uint32 now_ms = yaoxin_now_ms();
 
+	if (!g_keepalive_en)
+		return;
 	if ((now_ms - g_debug_last_ms) < 2000)
 		return;
 	g_debug_last_ms = now_ms;
 
-	fLib_printf("[%d]:Still alive\n", now_ms / 1000);
+	fLib_printf("[%u]:Still alive\n", now_ms / 1000U);
+}
+
+/* ---------- 遥信串口命令（注册到 console_cli） ---------- */
+
+static void yaoxin_cmd_status(int argc, char **argv)
+{
+	uint32 gpio_data = fLib_Gpio_ReadData(GPIO_FTGPIO010_PA_BASE);
+	uint32 now_ms = yaoxin_now_ms();
+	uint32 qlen;
+
+	(void)argc;
+	(void)argv;
+
+	if (g_q_tail >= g_q_head)
+		qlen = g_q_tail - g_q_head;
+	else
+		qlen = YAOXIN_LOCAL_QUEUE_DEPTH - g_q_head + g_q_tail;
+
+	fLib_printf("tick=%u synced=%u debounce=%ums keepalive=%u\n",
+		    now_ms, g_time_synced, g_debounce_ms, g_keepalive_en);
+	fLib_printf("qlen=%u qdrop=%u\n", qlen, g_q_drop);
+	fLib_printf("DOOR  pin11 lvl=%u st=%u cnt=%u\n",
+		    (gpio_data >> YAOXIN_PIN_DOOR) & 1U,
+		    g_pin_state[YAOXIN_PIN_DOOR],
+		    g_trigger_count[YAOXIN_PIN_DOOR]);
+	fLib_printf("SIG2  pin12 lvl=%u st=%u cnt=%u\n",
+		    (gpio_data >> YAOXIN_PIN_SIGNAL2) & 1U,
+		    g_pin_state[YAOXIN_PIN_SIGNAL2],
+		    g_trigger_count[YAOXIN_PIN_SIGNAL2]);
+	fLib_printf("SIG1  pin13 lvl=%u st=%u cnt=%u\n",
+		    (gpio_data >> YAOXIN_PIN_SIGNAL1) & 1U,
+		    g_pin_state[YAOXIN_PIN_SIGNAL1],
+		    g_trigger_count[YAOXIN_PIN_SIGNAL1]);
+}
+
+static void yaoxin_cmd_version(int argc, char **argv)
+{
+	(void)argc;
+	(void)argv;
+	fLib_printf("yaoxin %u.%u.%u\n",
+		    YAOXIN_VERSION_MAJOR,
+		    YAOXIN_VERSION_MINOR,
+		    YAOXIN_VERSION_PATCH);
+}
+
+static void yaoxin_cmd_keepalive(int argc, char **argv)
+{
+	(void)argc;
+	(void)argv;
+	g_keepalive_en = g_keepalive_en ? 0U : 1U;
+	fLib_printf("keepalive %s\n", g_keepalive_en ? "on" : "off");
+}
+
+static void yaoxin_cmd_debounce(int argc, char **argv)
+{
+	unsigned int ms;
+
+	if (argc < 2 || !console_cli_parse_u32(argv[1], &ms)) {
+		fLib_printf("usage: d <ms>\n");
+		return;
+	}
+	g_debounce_ms = ms;
+	fLib_printf("debounce=%u ms\n", g_debounce_ms);
+}
+
+static const console_cmd_t g_yaoxin_cmds[] = {
+	{ "s", "status (tick/gpio/queue)", yaoxin_cmd_status },
+	{ "status", "same as s", yaoxin_cmd_status },
+	{ "v", "yaoxin version", yaoxin_cmd_version },
+	{ "a", "toggle keepalive print", yaoxin_cmd_keepalive },
+	{ "d", "d <ms>  set debounce", yaoxin_cmd_debounce },
+};
+
+static void yaoxin_cli_register(void)
+{
+	console_cli_register(g_yaoxin_cmds,
+			     sizeof(g_yaoxin_cmds) / sizeof(g_yaoxin_cmds[0]));
 }
 
 static void yaoxin_pin_state_init(uint32 gpio_pin)
@@ -589,4 +671,6 @@ void yaoxin_init(void)
 		      (gpio_data >> YAOXIN_PIN_DOOR) & 1U,
 		      (gpio_data >> YAOXIN_PIN_SIGNAL2) & 1U,
 		      (gpio_data >> YAOXIN_PIN_SIGNAL1) & 1U);
+
+	yaoxin_cli_register();
 }

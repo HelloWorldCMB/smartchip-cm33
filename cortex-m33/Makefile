@@ -57,6 +57,7 @@ LDFLAGS    := $(CPU_FLAGS) -T$(LDSCRIPT) \
 C_SRCS := \
 	src/main.c \
 	src/yaoxin.c \
+	src/console_cli.c \
 	Drivers/src/DrvUART010.c \
 	Drivers/src/DrvGPIO010.c \
 	Drivers/src/DrvSemaphore.c \

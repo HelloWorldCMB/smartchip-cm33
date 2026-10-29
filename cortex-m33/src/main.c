@@ -7,6 +7,7 @@
 #include "spec.h"
 #include "DrvUART010.h"
 #include "ipc.h"
+#include "console_cli.h"
 #include "DrvSemaphore.h"
 #include "leo_cm33.h"
 
@@ -20,11 +21,12 @@ int main(void)
 	semaphore_init(SEMAPHORE_PA_BASE);
 	NVIC_EnableIRQ(SEMAPHORE_FTSEMAPHRE_IRQ);
 
-	yaoxin_init();
-
+	yaoxin_init();	/* 内部会 register 遥信命令并 console_cli_init */
+	console_cli_init("cm33> ");
 	while (1) {
-		yaoxin_queue_poll();	/* 本地队列出队 -> 共享内存 notify */
-		keep_alive_debug_poll(); /* 每隔2秒打印一次 */
+		yaoxin_queue_poll();
+		console_cli_poll();
+		keep_alive_debug_poll();
 		__WFI();
 	}
 }
